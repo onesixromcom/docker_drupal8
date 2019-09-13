@@ -1,0 +1,63 @@
+version: '3'
+services:
+  db:
+    image: mariadb:10.2
+    container_name: "${PROJECT_NAME}_mariadb"
+    environment:
+      MYSQL_DATABASE: database
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: drupal
+      MYSQL_PASSWORD: drupal
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./dump.sql:/docker-entrypoint-initdb.d/dump.sql
+    networks:
+      - internal  
+    restart: "no"
+  php-fpm:
+    container_name: "${PROJECT_NAME}_php-fpm"
+    build:
+      context: docker/php-fpm
+    depends_on:
+      - db
+    volumes:
+      - ./docroot:/var/www
+    environment:
+      XDEBUG_CONFIG: "remote_host=192.168.220.1 remote_enable=1"
+      PHP_IDE_CONFIG: "serverName=Docker"
+    networks:
+      - internal
+  nginx:
+    container_name: "${PROJECT_NAME}_nginx"
+    build:
+      context: docker/nginx
+    volumes:
+      - ./docroot:/var/www
+    ports:
+      - "80:80"
+    depends_on:
+      - php-fpm
+      - db
+    networks:
+      - internal
+  drush:
+    image: drupaldocker/drush:8
+    container_name: "${PROJECT_NAME}_drush"
+    depends_on:
+      - db
+    links:
+      - db
+      - php-fpm
+    volumes:
+      - ./docroot:/var/www
+    networks:
+      - internal
+volumes:
+  db_data:      
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.220.0/28
